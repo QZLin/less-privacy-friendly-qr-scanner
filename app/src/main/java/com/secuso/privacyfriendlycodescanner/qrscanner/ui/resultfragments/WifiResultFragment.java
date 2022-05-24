@@ -54,6 +54,9 @@ public class WifiResultFragment extends ResultFragment {
                             ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
                             clipboard.setText(pw);
                             break;
+                        case 1:
+                            WifiUtils wifiUtils = new WifiUtils(context);
+                            wifiUtils.connectToWifi(ssid, pw);
 
                         default:
                     }
