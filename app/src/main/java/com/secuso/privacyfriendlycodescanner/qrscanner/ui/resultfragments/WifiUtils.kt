@@ -1,5 +1,6 @@
 package com.secuso.privacyfriendlycodescanner.qrscanner.ui.resultfragments
 
+import android.annotation.TargetApi
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
@@ -15,24 +16,39 @@ class WifiUtils(context: Context) {
     private var wifiManager: WifiManager
     private var connectivityManager: ConnectivityManager
 
+    @Suppress("DEPRECATION")
+    @TargetApi(Build.VERSION_CODES.M)
+    fun connectToWifiMinSDK17(ssid: String, password: String) {
+        try {
+            val wifiConfig = WifiConfiguration()
+            wifiConfig.SSID = "\"$ssid\""
+            wifiConfig.preSharedKey = "\"$password\""
+            val netId = wifiManager.addNetwork(wifiConfig)
+            wifiManager.disconnect()
+            wifiManager.enableNetwork(netId, true)
+            wifiManager.reconnect()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     fun connectToWifi(ssid: String, password: String) {
+        connectToWifi(ssid, password, "wpa")
+    }
+
+    fun connectToWifi(ssid: String, password: String, encryption: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            try {
-                val wifiConfig = WifiConfiguration()
-                wifiConfig.SSID = "\"" + ssid + "\""
-                wifiConfig.preSharedKey = "\"" + password + "\""
-                val netId = wifiManager.addNetwork(wifiConfig)
-                wifiManager.disconnect()
-                wifiManager.enableNetwork(netId, true)
-                wifiManager.reconnect()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            connectToWifiMinSDK17(ssid, password)
         } else {
-            val wifiNetworkSpecifier = WifiNetworkSpecifier.Builder()
-                .setSsid(ssid)
-                .setWpa2Passphrase(password)
-                .build()
+            //TODO: Test for android q device
+            var wifiNetworkSpecifierBuilder = WifiNetworkSpecifier.Builder()
+            wifiNetworkSpecifierBuilder = when (encryption.lowercase()) {
+                "wpa2" -> wifiNetworkSpecifierBuilder.setWpa2Passphrase(password)
+                "wpa3" -> wifiNetworkSpecifierBuilder.setWpa3Passphrase(password)
+                else -> wifiNetworkSpecifierBuilder.setWpa2Passphrase(password)
+            }
+                .setSsid(ssid).setWpa2Passphrase(password)
+            val wifiNetworkSpecifier = wifiNetworkSpecifierBuilder.build()
 
             val networkRequest = NetworkRequest.Builder()
                 .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
@@ -40,24 +56,22 @@ class WifiUtils(context: Context) {
                 .build()
 
             val networkCallback = object : ConnectivityManager.NetworkCallback() {
-                override fun onUnavailable() {
+                /*override fun onUnavailable() {
                     super.onUnavailable()
                 }
 
                 override fun onLosing(network: Network, maxMsToLive: Int) {
                     super.onLosing(network, maxMsToLive)
-
-                }
+                }*/
 
                 override fun onAvailable(network: Network) {
                     super.onAvailable(network)
                     connectivityManager.bindProcessToNetwork(network)
                 }
 
-                override fun onLost(network: Network) {
+                /*override fun onLost(network: Network) {
                     super.onLost(network)
-
-                }
+                }*/
             }
             connectivityManager.requestNetwork(networkRequest, networkCallback)
         }
