@@ -245,42 +245,20 @@ class ScannerActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedL
         return null
     }
 
-    private fun getRgbList(bitmap: Bitmap): List<Int> {
+    private fun getRgbIntArray(bitmap: Bitmap): IntArray {
         val rgbList = mutableListOf<Int>()
         for (y in 0 until bitmap.height) {
             for (x in 0 until bitmap.width) {
-                val colour = bitmap.getPixel(x, y)
-                val red = Color.red(colour)
-                val green = Color.green(colour)
-                val blue = Color.blue(colour)
+                val color = bitmap.getPixel(x, y)
+                val red = Color.red(color)
+                val green = Color.green(color)
+                val blue = Color.blue(color)
                 rgbList.add(red)
                 rgbList.add(green)
                 rgbList.add(blue)
             }
         }
-        return rgbList
-    }
-
-    private fun getRgbIntArray(bitmap: Bitmap): IntArray {
-        return getRgbList(bitmap).toIntArray()
-    }
-
-    private fun getRgbByteArray(bitmap: Bitmap): ByteArray {
-        val rgbList = mutableListOf<Byte>()
-        for (y in 0 until bitmap.height) {
-            for (x in 0 until bitmap.width) {
-                val colour: Int = bitmap.getPixel(x, y)
-                val red = Color.red(colour)
-                val green = Color.green(colour)
-                val blue = Color.blue(colour)
-//                val alpha = Color.alpha(colour)
-                rgbList.add(red.toByte())
-                rgbList.add(green.toByte())
-                rgbList.add(blue.toByte())
-//                rgbList.add(alpha)
-            }
-        }
-        return rgbList.toByteArray()
+        return rgbList.toIntArray()
     }
 
     private fun decodeQrImage(bitmap: Bitmap): Result {
@@ -323,13 +301,12 @@ class ScannerActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedL
     }
 
     private fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int) {
-        val frameSize = width * height
-        var yIndex = 0
-        var uvIndex = frameSize
         var index = 0
+        var yIndex = 0
+        var uvIndex = width * height // frameSize
         for (j in 0 until height) {
             for (i in 0 until width) {
-                val a = argb[index] and -0x1000000 shr 24 // a is not used obviously
+//                val a = argb[index] and -0x1000000 shr 24 // a is not used obviously
                 val r = argb[index] and 0xff0000 shr 16
                 val g = argb[index] and 0xff00 shr 8
                 val b = argb[index] and 0xff shr 0
@@ -342,10 +319,11 @@ class ScannerActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedL
                 // NV21 has a plane of Y and interleaved planes of VU each sampled by a factor of 2
                 // meaning for every 4 Y pixels there are 1 V and 1 U.  Note the sampling is every other
                 // pixel AND every other scanline.
-                yuv420sp[yIndex++] = (if (y < 0) 0 else if (y > 255) 255 else y).toByte()
+                fun checkRange(i: Int): Int = if (i < 0) 0 else if (i > 255) 255 else i
+                yuv420sp[yIndex++] = (checkRange(y)).toByte()
                 if (j % 2 == 0 && index % 2 == 0) {
-                    yuv420sp[uvIndex++] = (if (v < 0) 0 else if (v > 255) 255 else v).toByte()
-                    yuv420sp[uvIndex++] = (if (u < 0) 0 else if (u > 255) 255 else u).toByte()
+                    yuv420sp[uvIndex++] = (checkRange(v)).toByte()
+                    yuv420sp[uvIndex++] = (checkRange(u)).toByte()
                 }
                 index++
             }
@@ -370,29 +348,27 @@ class ScannerActivity : BaseActivity(), NavigationView.OnNavigationItemSelectedL
             val imageInputStream = contentResolver.openInputStream(uri)
             val bytes = imageInputStream!!.readBytes()
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            imageInputStream.close()
 
-            val result: Result?
+            var result: Result? = null
             try {
                 result = readQRImage(bitmap)
-            } catch (e: NotFoundException) {
+            } catch (_: NotFoundException) {
+            }
+            if (result == null) {
                 Toast.makeText(applicationContext, "Can't Parse QR", Toast.LENGTH_SHORT).show()
                 return
             }
-            if (result == null) return
 
             val sourceData = SourceData(
                 getNV21(bitmap.width, bitmap.height, bitmap),
-//                bitmap2Bytes(bitmap),
-//                getRgbByteArray(bitmap),
                 bitmap.width,
                 bitmap.height,
                 ImageFormat.NV21,
                 0
             )
             sourceData.cropRect = Rect(0, 0, 0, 0)
-
             val barcodeResult = BarcodeResult(result, sourceData)
-
 
             barcodeScannerView.setStatusText(result.text)
             beepManager!!.playBeepSoundAndVibrate()
